@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agent Avatar Playground</title>
+<script>
+  document.documentElement.dataset.theme = localStorage.getItem('aa-theme') || 'light';
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #fafafa; --surface: #fff; --line: #ececec; --line-strong: #dcdcdc;
+    --text: #111; --muted: #737373; --faint: #a3a3a3; --hover: #f5f5f5;
+    --track: #f0f0f0; --pill: #f4f4f4; --on-text: #fff; --text-hover: #262626; --shadow: rgba(0,0,0,.06);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0a0a0a; --surface: #141414; --line: #262626; --line-strong: #333;
+    --text: #f5f5f5; --muted: #a3a3a3; --faint: #737373; --hover: #1c1c1c;
+    --track: #1f1f1f; --pill: #222; --on-text: #111; --text-hover: #e5e5e5; --shadow: rgba(0,0,0,.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 13px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font: inherit; color: inherit; }
+
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 100vh; }
+
+  /* ---------- Stage (left) ---------- */
+  .stage { padding: 28px 32px 48px; display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+  .title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .theme { display: inline-flex; background: var(--track); border-radius: 999px; padding: 2px; }
+  .theme button {
+    width: 28px; height: 24px; border: 0; border-radius: 999px; background: none; cursor: pointer;
+    color: var(--faint); display: grid; place-items: center; padding: 0;
+  }
+  .theme button svg { width: 14px; height: 14px; }
+  .theme button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px var(--shadow); }
+
+  .hero {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+    display: grid; grid-template-rows: auto 1fr auto; min-height: 460px;
+  }
+  .hero-top { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; }
+  .hero-state { font-size: 15px; font-weight: 600; }
+  .hero-state span { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .hero-view { position: relative; display: grid; place-items: center; padding: 8px 72px 24px; }
+  .hero-avatar { width: 120px; height: 120px; }
+  .zoom {
+    position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--muted);
+  }
+  .zoom input { writing-mode: vertical-lr; direction: rtl; width: 16px; height: 160px; margin: 0; accent-color: var(--text); }
+  .zoom b { font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .zoom i { display: block; border-radius: 50%; background: var(--faint); }
+  .hero-bottom { border-top: 1px solid var(--line); padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .hero-note { color: var(--muted); min-height: 20px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+    padding: 4px 11px; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s;
+  }
+  .chip:hover { background: var(--hover); }
+  .chip.on { background: var(--text); color: var(--on-text); border-color: var(--text); }
+
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: var(--muted); user-select: none; }
+  .switch input { display: none; }
+  .switch i { width: 28px; height: 16px; border-radius: 999px; background: var(--line-strong); position: relative; transition: background .15s; }
+  .switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .switch input:checked + i { background: var(--text); }
+  .switch input:checked + i::after { background: var(--on-text); }
+  .switch input:checked + i::after { transform: translateX(12px); }
+
+  .toggle-row { justify-content: space-between; color: var(--muted); }
+  .toggle-row i { order: 2; }
+  .hero-actions { display: flex; align-items: center; gap: 16px; }
+  .live {
+    display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px; border-radius: 999px;
+    border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; font-weight: 500;
+  }
+  .live:hover { background: var(--hover); }
+  .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .live.on { background: var(--text); border-color: var(--text); color: var(--on-text); }
+  .live.on i { background: #ef4444; animation: rec 1.2s ease-in-out infinite; }
+  @keyframes rec { 50% { opacity: .35; } }
+  .live-read { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .tabs { display: inline-flex; background: var(--track); border-radius: 10px; padding: 3px; }
+  .tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 8px; cursor: pointer; color: var(--muted); font-weight: 500; }
+  .tabs button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px var(--shadow); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 14px 14px;
+    cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 14px; transition: border-color .15s;
+  }
+  .tile:hover { border-color: var(--line-strong); }
+  .tile.on { border-color: var(--text); }
+  .tile .av { width: 84px; height: 84px; }
+  .tile .meta { width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .tile .name { font-weight: 500; }
+  .tile .cat { color: var(--faint); font-size: 12px; }
+  .tile .best { align-self: flex-start; font-size: 11px; color: var(--muted); background: var(--pill); border-radius: 6px; padding: 1px 7px; margin-top: -8px; }
+
+  .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .agent {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+    display: flex; gap: 14px; align-items: center; cursor: pointer; transition: border-color .15s;
+  }
+  .agent:hover { border-color: var(--line-strong); }
+  .agent.on { border-color: var(--text); }
+  .agent .av { width: 56px; height: 56px; flex: none; }
+  .agent .name { font-weight: 500; font-size: 14px; }
+  .agent .desc { color: var(--muted); }
+  .add { display: flex; gap: 8px; margin-top: 12px; }
+  .add input { flex: 1; }
+
+  /* ---------- Config panel (right) ---------- */
+  .panel {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: var(--surface); border-left: 1px solid var(--line);
+    padding: 24px 20px; display: flex; flex-direction: column; gap: 24px;
+  }
+  .group { display: flex; flex-direction: column; gap: 14px; }
+  .group h4 { margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > .lbl { display: flex; justify-content: space-between; color: var(--muted); }
+  .field > .lbl b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; min-width: 0; }
+
+  input[type=text], select {
+    width: 100%; height: 32px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface);
+  }
+  input[type=text]:focus, select:focus { outline: none; border-color: var(--text); }
+  input[type=range] { width: 100%; accent-color: var(--text); margin: 0; }
+
+  .btn {
+    height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-strong);
+    background: var(--surface); cursor: pointer; font-weight: 500; white-space: nowrap;
+  }
+  .btn:hover { background: var(--hover); }
+  .btn.dark { background: var(--text); border-color: var(--text); color: var(--on-text); }
+  .btn.dark:hover { background: var(--text-hover); }
+  .btn.icon { flex: none; width: 32px; padding: 0; }
+
+  .seg { display: flex; background: var(--track); border-radius: 8px; padding: 2px; }
+  .seg button { flex: 1; border: 0; background: none; height: 28px; border-radius: 6px; cursor: pointer; color: var(--muted); font-weight: 500; }
+  .seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px var(--shadow); }
+
+  .exports { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .exports .btn.dark { grid-column: 1 / -1; }
+
+  [hidden] { display: none !important; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--on-text); padding: 7px 12px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; }
+    .panel { position: static; height: auto; border-left: 0; border-top: 1px solid var(--line); order: -1; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="stage">
+    <div class="topbar">
+      <div class="title">Agent Avatar</div>
+      <div class="theme" id="theme" role="group" aria-label="Color theme">
+        <button data-v="light" title="Light" aria-label="Light mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+        <button data-v="dark" title="Dark" aria-label="Dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+      </div>
+    </div>
+
+    <section class="hero">
+      <div class="hero-top">
+        <div class="hero-state" id="heroState"></div>
+        <div class="hero-actions">
+          <span class="live-read" id="liveRead" hidden></span>
+          <button class="live" id="live" type="button"><i></i>Speak live</button>
+          <label class="switch"><input type="checkbox" id="autoplay" /><i></i>Simulate call</label>
+        </div>
+      </div>
+      <div class="hero-view">
+        <div class="hero-avatar" id="hero"></div>
+        <div class="zoom" title="Preview size">
+          <b id="zoomVal"></b>
+          <i style="width:10px;height:10px"></i>
+          <input id="zoom" type="range" min="32" max="200" step="4" value="120" aria-label="Preview size" />
+          <i style="width:5px;height:5px"></i>
+        </div>
+      </div>
+      <div class="hero-bottom">
+        <div class="chips" id="states"></div>
+        <div class="hero-note" id="heroNote"></div>
+      </div>
+    </section>
+
+    <div class="bar">
+      <div class="tabs" id="tabs">
+        <button data-v="lib" class="on">Animations</button>
+        <button data-v="agents">Agents</button>
+      </div>
+      <div class="chips" id="cats"></div>
+    </div>
+
+    <section id="lib" class="grid"></section>
+
+    <section id="agentsView" hidden>
+      <div class="agents" id="agents"></div>
+      <form class="add" id="addForm">
+        <input type="text" id="newName" placeholder="Agent name" required />
+        <input type="text" id="newDesc" placeholder="Description" />
+        <button class="btn dark" type="submit">Add</button>
+      </form>
+    </section>
+  </main>
+
+  <aside class="panel">
+    <div class="group">
+      <h4>Avatar</h4>
+      <div class="field">
+        <div class="lbl">Seed</div>
+        <div class="row">
+          <input id="seed" type="text" />
+          <button class="btn icon" id="shuffle" title="Random seed">↻</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h4>Shape</h4>
+      <div class="field">
+        <div class="lbl">Circle type</div>
+        <div class="seg" id="typeSeg">
+          <button data-v="solid">Solid</button>
+          <button data-v="hollow">Hollow</button>
+          <button data-v="mixed">Mixed</button>
+        </div>
+      </div>
+      <div class="field" id="hollowField">
+        <div class="lbl">Hollow ratio <b id="hVal"></b></div>
+        <input id="hollow" type="range" min="0.05" max="0.95" step="0.05" />
+      </div>
+      <div class="field" id="thickField">
+        <div class="lbl">Ring thickness <b id="tVal"></b></div>
+        <input id="thickness" type="range" min="0.15" max="0.4" step="0.01" />
+      </div>
+      <div class="field">
+        <div class="lbl">Line pattern</div>
+        <select id="pattern">
+          <option value="none">None</option>
+          <option value="diagonal">Diagonal</option>
+          <option value="horizontal">Horizontal</option>
+          <option value="vertical">Vertical</option>
+          <option value="cross">Cross</option>
+          <option value="mixed">Mixed</option>
+        </select>
+      </div>
+      <div class="field" id="patternAmtField">
+        <div class="lbl">Patterned dots <b id="paVal"></b></div>
+        <input id="patternAmt" type="range" min="0.05" max="1" step="0.05" />
+      </div>
+      <div class="field">
+        <div class="lbl">Circle size <b id="dVal"></b></div>
+        <input id="diameter" type="range" min="6" max="48" step="3" />
+      </div>
+      <div class="field">
+        <div class="lbl">Circles per line <b id="nVal"></b></div>
+        <input id="n" type="range" min="2" max="8" step="1" />
+      </div>
+    </div>
+
+    <div class="group">
+      <h4>Color</h4>
+      <div class="seg" id="modeSeg">
+        <button data-v="seed">Seeded</button>
+        <button data-v="fixed">Fixed</button>
+        <button data-v="multi">Multi</button>
+      </div>
+      <div class="field" id="hueField">
+        <div class="lbl">Hue</div>
+        <select id="hue"></select>
+      </div>
+      <div class="field">
+        <div class="lbl">Shades</div>
+        <div class="row"><select id="shadeMin"></select><select id="shadeMax"></select></div>
+      </div>
+      <div class="field">
+        <div class="lbl">Background</div>
+        <div class="seg" id="bgSeg">
+          <button data-v="none">None</button>
+          <button data-v="white">White</button>
+          <button data-v="tint">Tint</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h4>ASCII</h4>
+      <label class="switch toggle-row">ASCII mode<input type="checkbox" id="ascii" /><i></i></label>
+      <div class="field" id="glyphField">
+        <div class="lbl">Glyphs</div>
+        <div class="seg" id="glyphSeg">
+          <button data-v="density">Density</button>
+          <button data-v="blocks">Blocks</button>
+          <button data-v="binary">Binary</button>
+          <button data-v="braille">Braille</button>
+        </div>
+      </div>
+      <label class="switch toggle-row" id="sprinkleField">Static characters<input type="checkbox" id="sprinkle" /><i></i></label>
+      <div class="field" id="sprinkleAmtField">
+        <div class="lbl">Amount <b id="saVal"></b></div>
+        <input id="sprinkleAmt" type="range" min="0.05" max="0.6" step="0.05" />
+      </div>
+    </div>
+
+    <div class="group">
+      <h4>Motion</h4>
+      <div class="field">
+        <div class="lbl">Speed <b id="spVal"></b></div>
+        <input id="speed" type="range" min="0.25" max="2" step="0.25" />
+      </div>
+    </div>
+
+    <div class="group">
+      <h4>Export</h4>
+      <div class="exports">
+        <button class="btn dark" id="dlSvg">Download SVG</button>
+        <button class="btn" id="dlPng">PNG</button>
+        <button class="btn" id="copySvg">Copy SVG</button>
+      </div>
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="agent-avatar.js?v=pattern-1"></script>
+<script>
+const A = window.AgentAvatar;
+const $ = id => document.getElementById(id);
+
+const state = { ...A.DEFAULTS, seed: 'Sales concierge', ascii: 1, glyphs: 'blocks', pattern: 'mixed' };
+try {
+  const h = new URLSearchParams(location.hash.slice(1));
+  for (const k of Object.keys(state)) if (h.has(k)) state[k] = typeof state[k] === 'number' ? +h.get(k) : h.get(k);
+} catch (_) {}
+
+const ui = { tab: 'lib', cat: 'All', state: 'static', anim: null };
+let agents = [
+  { name: 'Appointment assistant', desc: 'Book appointments and manage schedule changes by phone.' },
+  { name: 'Customer care', desc: 'Answer common questions and resolve everyday issues.' },
+  { name: 'Sales concierge', desc: 'Qualify new leads and connect callers with your sales team.' },
+  { name: 'Order support', desc: 'Track deliveries and help customers with order updates.' },
+  { name: 'Collections reminder', desc: 'Send payment reminders and capture promises to pay.' },
+  { name: 'Claims intake', desc: 'Collect first notice of loss details over a call.' },
+];
+const shape = () => { const { seed, ...rest } = state; return rest; };
+const bestFor = {};
+for (const s of Object.values(A.STATES)) if (s.label !== A.ANIMATIONS[s.animation].label) (bestFor[s.animation] ||= []).push(s.label);
+
+/* ---------- Hero ---------- */
+const hero = A.mount($('hero'), { ...state, state: ui.state });
+let agentAvs = [];
+
+$('states').innerHTML = Object.entries(A.STATES)
+  .map(([k, s]) => `<button class="chip" data-v="${k}">${s.label}</button>`).join('');
+
+function playState(name) {
+  ui.state = name; ui.anim = null;
+  hero.setState(name);
+  syncHero();
+}
+function playAnim(name) {
+  ui.state = null; ui.anim = name;
+  hero.setAnimation(name);
+  syncHero();
+}
+function currentAnim() { return ui.anim || A.STATES[ui.state].animation; }
+function syncHero() {
+  const animName = currentAnim(), anim = A.ANIMATIONS[animName];
+  [...$('states').children].forEach(b => b.classList.toggle('on', b.dataset.v === ui.state));
+  [...$('lib').children].forEach(t => t.classList.toggle('on', t.dataset.v === animName));
+  if (ui.state) {
+    const s = A.STATES[ui.state];
+    $('heroState').innerHTML = s.label + (anim.label !== s.label ? `<span>${anim.label}</span>` : '');
+    $('heroNote').textContent = s.why;
+  } else {
+    $('heroState').innerHTML = `${anim.label}<span>${anim.category}</span>`;
+    $('heroNote').textContent = anim.description;
+  }
+  agentAvs.forEach(av => av.setAnimation(animName));
+}
+$('states').addEventListener('click', e => {
+  const v = e.target.dataset.v; if (!v) return;
+  stopAutoplay(); playState(v);
+});
+
+/* Simulated call: walks through a realistic state sequence. */
+const SCRIPT = [
+  ['connecting', 2.4], ['idle', 1.4], ['speaking', 3.6], ['listening', 3],
+  ['thinking', 2], ['working', 2], ['speaking', 3], ['interrupted', 1.2], ['listening', 2.6],
+  ['thinking', 1.6], ['hold', 2.6], ['speaking', 3.2], ['disconnected', 2],
+];
+let autoTimer = 0;
+function runScript(i = 0) {
+  const [s, sec] = SCRIPT[i % SCRIPT.length];
+  playState(s);
+  autoTimer = setTimeout(() => runScript(i + 1), (sec / state.speed) * 1000);
+}
+function stopAutoplay() { clearTimeout(autoTimer); $('autoplay').checked = false; }
+$('autoplay').addEventListener('change', e => e.target.checked ? runScript() : stopAutoplay());
+
+/* Speak live: the mic drives every avatar (level, pitch, spectrum), analysed locally in the browser. */
+let voice = null, readTimer = 0;
+async function startLive() {
+  if (!navigator.mediaDevices?.getUserMedia) { toast('Microphone needs localhost or https'); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    voice = A.createVoiceAnalyser(stream);
+  } catch (err) {
+    toast('Microphone access was blocked'); return;
+  }
+  A.setAudio(voice);
+  stopAutoplay(); playState('speaking');
+  $('live').classList.add('on'); $('liveRead').hidden = false;
+  readTimer = setInterval(() => { $('liveRead').textContent = voice.voiced ? Math.round(voice.hz) + ' Hz' : '—'; }, 120);
+}
+function stopLive() {
+  if (!voice) return;
+  clearInterval(readTimer);
+  voice.stop(); voice = null; A.setAudio(null);
+  $('live').classList.remove('on'); $('liveRead').hidden = true;
+}
+$('live').addEventListener('click', () => voice ? stopLive() : startLive());
+
+/* ---------- Animation library ---------- */
+const cats = ['All', ...new Set(Object.values(A.ANIMATIONS).map(a => a.category))];
+$('cats').innerHTML = cats.map(c => `<button class="chip${c === ui.cat ? ' on' : ''}" data-v="${c}">${c}</button>`).join('');
+$('cats').addEventListener('click', e => {
+  const v = e.target.dataset.v; if (!v) return;
+  ui.cat = v;
+  [...$('cats').children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  [...$('lib').children].forEach(t => t.hidden = v !== 'All' && t.dataset.cat !== v);
+});
+
+const libAvs = [];
+for (const [key, a] of Object.entries(A.ANIMATIONS)) {
+  const tile = document.createElement('div');
+  tile.className = 'tile'; tile.dataset.v = key; tile.dataset.cat = a.category; tile.title = a.description;
+  tile.innerHTML = `<div class="av"></div><div class="meta"><span class="name">${a.label}</span><span class="cat">${a.category}</span></div>`
+    + (bestFor[key] ? `<span class="best">${bestFor[key].join(', ')}</span>` : '');
+  tile.addEventListener('click', () => { stopAutoplay(); playAnim(key); });
+  $('lib').appendChild(tile);
+  libAvs.push(A.mount(tile.querySelector('.av'), { ...state, animation: key }));
+}
+
+/* ---------- Agents ---------- */
+function renderAgents() {
+  agentAvs.forEach(av => av.destroy());
+  $('agents').replaceChildren();
+  agentAvs = agents.map(a => {
+    const el = document.createElement('div');
+    el.className = 'agent' + ((a.seed ?? a.name) === state.seed ? ' on' : '');
+    el.innerHTML = '<div class="av"></div><div><div class="name"></div><div class="desc"></div></div>';
+    el.querySelector('.name').textContent = a.name;
+    el.querySelector('.desc').textContent = a.desc;
+    el.addEventListener('click', () => { state.seed = a.seed ?? a.name; syncInputs(); apply(); });
+    $('agents').appendChild(el);
+    return A.mount(el.querySelector('.av'), { ...shape(), seed: a.seed ?? a.name, animation: currentAnim() });
+  });
+}
+$('addForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('newName').value.trim(); if (!name) return;
+  agents.push({ name, desc: $('newDesc').value.trim() });
+  $('newName').value = ''; $('newDesc').value = '';
+  state.seed = name; syncInputs(); apply();
+});
+
+$('tabs').addEventListener('click', e => {
+  const v = e.target.dataset.v; if (!v) return;
+  ui.tab = v;
+  [...$('tabs').children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  $('lib').hidden = v !== 'lib'; $('cats').hidden = v !== 'lib';
+  $('agentsView').hidden = v !== 'agents';
+});
+
+/* ---------- Config panel ---------- */
+A.HUES.forEach(h => $('hue').add(new Option(h[0].toUpperCase() + h.slice(1), h)));
+A.SHADES.forEach(s => { $('shadeMin').add(new Option(s, s)); $('shadeMax').add(new Option(s, s)); });
+
+function setSeg(id, v) { [...$(id).children].forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
+function syncInputs() {
+  $('seed').value = state.seed;
+  for (const k of ['hollow', 'thickness', 'speed', 'n']) $(k).value = state[k];
+  $('diameter').value = state.d;
+  $('hue').value = state.hue; $('shadeMin').value = state.shadeMin; $('shadeMax').value = state.shadeMax;
+  setSeg('typeSeg', state.type); setSeg('modeSeg', state.mode); setSeg('bgSeg', state.bg);
+  $('ascii').checked = !!state.ascii; $('sprinkle').checked = !!state.sprinkle;
+  $('sprinkleAmt').value = state.sprinkleAmt; setSeg('glyphSeg', state.glyphs);
+  $('pattern').value = state.pattern; $('patternAmt').value = state.patternAmt;
+}
+function syncLabels() {
+  $('hVal').textContent = Math.round(state.hollow * 100) + '%';
+  $('tVal').textContent = Math.round(state.thickness * 100) + '%';
+  $('dVal').textContent = state.d + ' px';
+  $('nVal').textContent = state.n;
+  $('spVal').textContent = state.speed + '×';
+  $('hollowField').hidden = state.type !== 'mixed';
+  $('thickField').hidden = state.type === 'solid';
+  $('hueField').hidden = state.mode !== 'fixed';
+  $('saVal').textContent = Math.round(state.sprinkleAmt * 100) + '%';
+  $('paVal').textContent = Math.round(state.patternAmt * 100) + '%';
+  $('patternAmtField').hidden = state.pattern === 'none';
+  $('glyphField').hidden = $('sprinkleField').hidden = !state.ascii;
+  $('sprinkleAmtField').hidden = !state.ascii || !state.sprinkle;
+}
+
+function apply() {
+  syncLabels();
+  hero.update(state);
+  libAvs.forEach(av => av.update(state));
+  renderAgents();
+  history.replaceState(null, '', '#' + new URLSearchParams(state));
+}
+
+$('seed').addEventListener('input', e => { state.seed = e.target.value; apply(); });
+$('shuffle').addEventListener('click', () => { state.seed = 'agent-' + Math.random().toString(36).slice(2, 7); syncInputs(); apply(); });
+const num = (id, key = id) => $(id).addEventListener('input', e => { state[key] = +e.target.value; apply(); });
+num('hollow'); num('thickness'); num('diameter', 'd'); num('n'); num('shadeMin'); num('shadeMax');
+$('speed').addEventListener('input', e => {
+  state.speed = +e.target.value; syncLabels();
+  [hero, ...libAvs, ...agentAvs].forEach(av => av.opts.speed = state.speed);
+});
+$('hue').addEventListener('change', e => { state.hue = e.target.value; apply(); });
+num('sprinkleAmt'); num('patternAmt');
+$('pattern').addEventListener('change', e => { state.pattern = e.target.value; apply(); });
+for (const k of ['ascii', 'sprinkle']) $(k).addEventListener('change', e => { state[k] = e.target.checked ? 1 : 0; apply(); });
+for (const [seg, key] of [['typeSeg', 'type'], ['modeSeg', 'mode'], ['bgSeg', 'bg'], ['glyphSeg', 'glyphs']]) {
+  $(seg).addEventListener('click', e => {
+    const v = e.target.dataset.v; if (!v) return;
+    state[key] = v; setSeg(seg, v); apply();
+  });
+}
+
+/* ---------- Preview zoom (32–200 px) ---------- */
+function setZoom(px) {
+  $('hero').style.width = $('hero').style.height = px + 'px';
+  $('zoomVal').textContent = px + 'px';
+}
+$('zoom').addEventListener('input', e => setZoom(+e.target.value));
+setZoom(+$('zoom').value);
+
+/* ---------- Theme ---------- */
+function setTheme(v) {
+  document.documentElement.dataset.theme = v;
+  localStorage.setItem('aa-theme', v);
+  setSeg('theme', v);
+}
+setSeg('theme', document.documentElement.dataset.theme);
+$('theme').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.v); });
+
+/* ---------- Export ---------- */
+const slug = () => (state.seed || 'avatar').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'avatar';
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1400); }
+$('dlSvg').addEventListener('click', () => download(new Blob([A.toSVG(state)], { type: 'image/svg+xml' }), slug() + '.svg'));
+$('dlPng').addEventListener('click', () => {
+  const img = new Image(), S = 512;
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = c.height = S;
+    c.getContext('2d').drawImage(img, 0, 0, S, S);
+    c.toBlob(b => download(b, slug() + '.png'), 'image/png');
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(A.toSVG(state));
+});
+$('copySvg').addEventListener('click', async () => { await navigator.clipboard.writeText(A.toSVG(state)); toast('SVG copied'); });
+
+syncInputs();
+syncLabels();
+renderAgents();
+playState(ui.state);
+history.replaceState(null, '', '#' + new URLSearchParams(state));
+</script>
+</body>
+</html>
